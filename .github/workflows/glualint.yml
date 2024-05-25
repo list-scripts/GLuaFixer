@@ -8,6 +8,11 @@ on:
         required: false
         default: ""
         description: "A URL or path (relative to your project root) of the glualint config"
+      prettyify:
+        type: boolean
+        required: false
+        default: false
+        description: "Should GLuaLint prettify and push the changes to the repository"
 
 jobs:
   lint:
@@ -61,6 +66,17 @@ jobs:
             echo "::info:: No explicit path to config file passed, glualint will use config files in the project if present."
           fi
 
+      - name: Prettify with GLuaLint
+        if: ${{ inputs.prettyify }}
+        run: |
+          cd "$GITHUB_WORKSPACE/project/"
+          if [[ "${{ inputs.config }}" != "" ]];
+          then
+            "$GITHUB_WORKSPACE/glualint" --output-format github --config "$GITHUB_WORKSPACE/.glualint.json" pretty-print .
+          else
+            "$GITHUB_WORKSPACE/glualint" --output-format github pretty-print .
+          fi
+
       - name: Lint with GLuaLint
         run: |
           cd "$GITHUB_WORKSPACE/project/"
@@ -70,3 +86,17 @@ jobs:
           else
             "$GITHUB_WORKSPACE/glualint" --output-format github lint .
           fi
+
+      - name: Commit outstanding changes
+        if: success() && inputs.prettyify
+        run: |
+          cd "$GITHUB_WORKSPACE/project/"
+          git config --local user.email "glualint-actions[bot]@users.noreply.github.com"
+          git config --local user.name "glualint-actions[bot]"
+          git commit -a -m "chore(lint): pretty print code"
+  
+      - name: Push changes
+        if: success() && inputs.prettyify
+        uses: ad-m/github-push-action@master
+        with:
+          branch: ${{ github.ref }}
